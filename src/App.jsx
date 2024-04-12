@@ -11,18 +11,15 @@ import deadAnt from "./assets/antdead.png";
 
 function App() {
   const [randomSweet, setRandomSweet] = useState(null);
-  const [antPosition, setAntPosition] = useState({ x: 0, y: 0 });
   const [life, setLife] = useState(100);
-  const [timer, setTimer] = useState(60);
-  const [isAntAlive, setIsAntAlive] = useState(true);
-  const [isAntDead, setIsAntDead] = useState(false);
   const [score, setScore] = useState(0);
   const [highScore, setHighScore] = useState(() => {
     const savedHighScore = localStorage.getItem("highScore");
     return savedHighScore ? JSON.parse(savedHighScore) : 0;
   });
-  const [isAntVisible, setIsAntVisible] = useState(true);
   const [antPositions, setAntPositions] = useState([]);
+  const [level, setLevel] = useState(1);
+  const [hasWon, setHasWon] = useState(false); // Track if the user has won
 
   useEffect(() => {
     localStorage.setItem("table", table);
@@ -63,57 +60,55 @@ function App() {
 
   useEffect(() => {
     const moveAnt = () => {
-      if (isAntAlive) {
-        const sweetElement = document.getElementById("sweet");
-        const sweetRect = sweetElement.getBoundingClientRect();
+      const sweetElement = document.getElementById("sweet");
+      const sweetRect = sweetElement.getBoundingClientRect();
 
-        setAntPositions((prevPositions) =>
-          prevPositions.map((prevPosition, index) => {
-            const antElement = document.getElementById(`ant-${index}`);
+      setAntPositions((prevPositions) =>
+        prevPositions.map((prevPosition, index) => {
+          const antElement = document.getElementById(`ant-${index}`);
 
-            if (!antElement || antElement.isDead) {
-              return prevPosition;
+          if (!antElement || antElement.isDead) {
+            return prevPosition;
+          }
+
+          const antRect = antElement.getBoundingClientRect();
+
+          const dx =
+            sweetRect.x +
+            sweetRect.width / 2 -
+            (prevPosition.x + antRect.width / 2);
+          const dy =
+            sweetRect.y +
+            sweetRect.height / 2 -
+            (prevPosition.y + antRect.height / 2);
+          const distance = Math.sqrt(dx * dx + dy * dy);
+
+          if (distance <= 10) {
+            setLife((prevLife) => prevLife - 1);
+            const sound = new Audio(localStorage.getItem("collisionSound"));
+            sound.play();
+            return prevPosition;
+          } else {
+            const speed = 10;
+            const vx = (dx / distance) * speed;
+            const vy = (dy / distance) * speed;
+
+            let newX = prevPosition.x + vx;
+            let newY = prevPosition.y + vy;
+            if (
+              newX < 0 ||
+              newX > window.innerWidth ||
+              newY < 0 ||
+              newY > window.innerHeight
+            ) {
+              newX = prevPosition.x - vx;
+              newY = prevPosition.y - vy;
             }
 
-            const antRect = antElement.getBoundingClientRect();
-
-            const dx =
-              sweetRect.x +
-              sweetRect.width / 2 -
-              (prevPosition.x + antRect.width / 2);
-            const dy =
-              sweetRect.y +
-              sweetRect.height / 2 -
-              (prevPosition.y + antRect.height / 2);
-            const distance = Math.sqrt(dx * dx + dy * dy);
-
-            if (distance <= 10) {
-              setLife((prevLife) => prevLife - 1);
-              const sound = new Audio(localStorage.getItem("collisionSound"));
-              sound.play();
-              return prevPosition;
-            } else {
-              const speed = 10;
-              const vx = (dx / distance) * speed;
-              const vy = (dy / distance) * speed;
-
-              let newX = prevPosition.x + vx;
-              let newY = prevPosition.y + vy;
-              if (
-                newX < 0 ||
-                newX > window.innerWidth ||
-                newY < 0 ||
-                newY > window.innerHeight
-              ) {
-                newX = prevPosition.x - vx;
-                newY = prevPosition.y - vy;
-              }
-
-              return { x: newX, y: newY };
-            }
-          })
-        );
-      }
+            return { x: newX, y: newY };
+          }
+        })
+      );
     };
 
     const interval = setInterval(moveAnt, 200);
@@ -121,7 +116,7 @@ function App() {
     return () => {
       clearInterval(interval);
     };
-  }, [isAntAlive]);
+  }, []);
 
   useEffect(() => {
     if (life <= 0) {
@@ -135,9 +130,11 @@ function App() {
   const restartGame = () => {
     setLife(100);
     setScore(0);
-    setIsAntAlive(true);
-    setIsAntDead(false);
+    setLevel(1);
+    setAntPositions(generateAntPositions(5));
+    setHasWon(false); // Reset hasWon state when restarting the game
   };
+
   const handleAntClick = (index) => {
     setAntPositions((prevPositions) =>
       prevPositions.map((position, i) => {
@@ -151,10 +148,8 @@ function App() {
     setScore((prevScore) => prevScore + 1);
   };
 
-  useEffect(() => {
-    const numAnts = 15;
+  const generateAntPositions = (numAnts) => {
     const initialAntPositions = [];
-
     for (let i = 0; i < numAnts; i++) {
       let newPos;
       let isColliding;
@@ -173,9 +168,15 @@ function App() {
 
       initialAntPositions.push(newPos);
     }
+    console.log("numants", numAnts);
+    return initialAntPositions;
+  };
 
-    setAntPositions(initialAntPositions);
-  }, []);
+  const handleNextLevel = () => {
+    setLevel((prevLevel) => prevLevel + 1);
+    setAntPositions(generateAntPositions(5 + level * 10));
+    setHasWon(false); // Reset hasWon state when moving to the next level
+  };
 
   return (
     <div className="h-screen w-screen overflow-hidden relative">
@@ -188,19 +189,20 @@ function App() {
           className="w-28 md:w-32 lg:w-36 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"
         />
       )}
-      {antPositions.length == score && (
+      {score >= antPositions.length && !hasWon && (
         <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
           <h1 className="text-4xl md:text-6xl lg:text-8xl text-green-500 text-shadow-md">
             You Win!
           </h1>
           <button
-            onClick={restartGame}
+            onClick={handleNextLevel}
             className="mt-8 px-8 py-4 text-xl md:text-2xl lg:text-3xl bg-blue-500 text-white rounded-md cursor-pointer shadow-md"
           >
-            Restart
+            Next Level
           </button>
         </div>
       )}
+
       {antPositions.map(
         (position, index) =>
           !position.isDead && (
