@@ -17,9 +17,11 @@ function App() {
     const savedHighScore = localStorage.getItem("highScore");
     return savedHighScore ? JSON.parse(savedHighScore) : 0;
   });
+  const [isFirstLoad, setIsFirstLoad] = useState(true);
   const [antPositions, setAntPositions] = useState([]);
   const [level, setLevel] = useState(1);
-  const [hasWon, setHasWon] = useState(false); // Track if the user has won
+  const [hasWon, setHasWon] = useState(false);
+  const [resetScore, setResetScore] = useState(0);
 
   useEffect(() => {
     localStorage.setItem("table", table);
@@ -132,7 +134,7 @@ function App() {
     setScore(0);
     setLevel(1);
     setAntPositions(generateAntPositions(5));
-    setHasWon(false); // Reset hasWon state when restarting the game
+    setHasWon(false);
   };
 
   const handleAntClick = (index) => {
@@ -146,6 +148,8 @@ function App() {
       })
     );
     setScore((prevScore) => prevScore + 1);
+    setResetScore((prevResetScore) => prevResetScore + 1);
+    console.log("resetScore", resetScore);
   };
 
   const generateAntPositions = (numAnts) => {
@@ -175,7 +179,8 @@ function App() {
   const handleNextLevel = () => {
     setLevel((prevLevel) => prevLevel + 1);
     setAntPositions(generateAntPositions(5 + level * 10));
-    setHasWon(false); // Reset hasWon state when moving to the next level
+    setHasWon(false);
+    setResetScore(0);
   };
 
   return (
@@ -189,7 +194,20 @@ function App() {
           className="w-28 md:w-32 lg:w-36 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"
         />
       )}
-      {score >= antPositions.length && !hasWon && (
+
+      {isFirstLoad ? (
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
+          <button
+            onClick={() => {
+              handleNextLevel();
+              setIsFirstLoad(false);
+            }}
+            className="mt-8 px-8 py-4 text-xl md:text-2xl lg:text-3xl bg-blue-500 text-white rounded-md cursor-pointer shadow-md"
+          >
+            Let's Play
+          </button>
+        </div>
+      ) : resetScore >= antPositions.length && !hasWon ? (
         <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
           <h1 className="text-4xl md:text-6xl lg:text-8xl text-green-500 text-shadow-md">
             You Win!
@@ -201,8 +219,7 @@ function App() {
             Next Level
           </button>
         </div>
-      )}
-
+      ) : null}
       {antPositions.map(
         (position, index) =>
           !position.isDead && (
