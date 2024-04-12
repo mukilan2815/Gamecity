@@ -12,20 +12,19 @@ import deadAnt from "./assets/antdead.png";
 function App() {
   const [randomSweet, setRandomSweet] = useState(null);
   const [antPosition, setAntPosition] = useState({ x: 0, y: 0 });
-  const [points, setPoints] = useState(100);
+  const [life, setLife] = useState(100);
   const [timer, setTimer] = useState(60);
   const [isAntAlive, setIsAntAlive] = useState(true);
-  const [score, setscore] = useState(0);
+  const [isAntDead, setIsAntDead] = useState(false);
+  const [score, setScore] = useState(0);
   const [highScore, setHighScore] = useState(() => {
     const savedHighScore = localStorage.getItem("highScore");
     return savedHighScore ? JSON.parse(savedHighScore) : 0;
   });
   const [isAntVisible, setIsAntVisible] = useState(true);
+  const [antPositions, setAntPositions] = useState([]);
 
   useEffect(() => {
-    // Store assets in local storage
-    localStorage.setItem("collisionSound", collisionSound);
-    localStorage.setItem("backgroundMusic", backgroundMusic);
     localStorage.setItem("table", table);
     localStorage.setItem("sweet", sweet);
     localStorage.setItem("sweet1", sweet1);
@@ -33,10 +32,11 @@ function App() {
     localStorage.setItem("blood", blood);
     localStorage.setItem("ant", ant);
     localStorage.setItem("deadAnt", deadAnt);
+    localStorage.setItem("collisionSound", collisionSound);
   }, []);
 
   useEffect(() => {
-    const music = new Audio(localStorage.getItem("backgroundMusic"));
+    const music = new Audio(backgroundMusic);
     music.loop = true;
 
     const playMusic = () => {
@@ -66,32 +66,57 @@ function App() {
       if (isAntAlive) {
         const sweetElement = document.getElementById("sweet");
         const sweetRect = sweetElement.getBoundingClientRect();
-        const antElement = document.getElementById("ant");
-        const antRect = antElement.getBoundingClientRect();
 
-        const dx = sweetRect.x - antRect.x;
-        const dy = sweetRect.y - antRect.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
+        setAntPositions((prevPositions) =>
+          prevPositions.map((prevPosition, index) => {
+            const antElement = document.getElementById(`ant-${index}`);
 
-        if (distance <= 10) {
-          setPoints((prevPoints) => prevPoints - 1);
+            if (!antElement || antElement.isDead) {
+              return prevPosition;
+            }
 
-          const sound = new Audio(collisionSound);
-          sound.play();
-        } else {
-          const speed = 30;
-          const vx = (dx / distance) * speed;
-          const vy = (dy / distance) * speed;
+            const antRect = antElement.getBoundingClientRect();
 
-          setAntPosition((prevPosition) => ({
-            x: prevPosition.x + vx,
-            y: prevPosition.y + vy,
-          }));
-        }
+            const dx =
+              sweetRect.x +
+              sweetRect.width / 2 -
+              (prevPosition.x + antRect.width / 2);
+            const dy =
+              sweetRect.y +
+              sweetRect.height / 2 -
+              (prevPosition.y + antRect.height / 2);
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance <= 10) {
+              setLife((prevLife) => prevLife - 1);
+              const sound = new Audio(localStorage.getItem("collisionSound"));
+              sound.play();
+              return prevPosition;
+            } else {
+              const speed = 10;
+              const vx = (dx / distance) * speed;
+              const vy = (dy / distance) * speed;
+
+              let newX = prevPosition.x + vx;
+              let newY = prevPosition.y + vy;
+              if (
+                newX < 0 ||
+                newX > window.innerWidth ||
+                newY < 0 ||
+                newY > window.innerHeight
+              ) {
+                newX = prevPosition.x - vx;
+                newY = prevPosition.y - vy;
+              }
+
+              return { x: newX, y: newY };
+            }
+          })
+        );
       }
     };
 
-    const interval = setInterval(moveAnt, 1000);
+    const interval = setInterval(moveAnt, 200);
 
     return () => {
       clearInterval(interval);
@@ -99,35 +124,58 @@ function App() {
   }, [isAntAlive]);
 
   useEffect(() => {
-    if (points === 0) {
-      if (points > highScore) {
-        setHighScore(points);
-        localStorage.setItem("highScore", JSON.stringify(points));
+    if (life <= 0) {
+      if (score > highScore) {
+        setHighScore(score);
+        localStorage.setItem("highScore", JSON.stringify(score));
       }
     }
-  }, [points]);
+  }, [life, score, highScore]);
 
   const restartGame = () => {
-    window.location.reload();
+    setLife(100);
+    setScore(0);
+    setIsAntAlive(true);
+    setIsAntDead(false);
   };
-  const handleAntClick = () => {
-    setIsAntAlive(false);
-    setIsAntVisible(false);
+  const handleAntClick = (index) => {
+    setAntPositions((prevPositions) =>
+      prevPositions.map((position, i) => {
+        if (i === index) {
+          return { ...position, isDead: true };
+        } else {
+          return position;
+        }
+      })
+    );
+    setScore((prevScore) => prevScore + 1);
+  };
 
-    setTimeout(() => {
-      setIsAntVisible(true);
-      setIsAntAlive(true);
-      const corners = [
-        { x: 0, y: 0 },
-        { x: window.innerWidth, y: 0 },
-        { x: 0, y: window.innerHeight }, 
-        { x: window.innerWidth, y: window.innerHeight }, 
-      ];
-      const randomCorner = corners[Math.floor(Math.random() * corners.length)];
-      setAntPosition(randomCorner);
-      setscore((prevScore) => prevScore + 1); 
-    }, 2000);
-  };
+  useEffect(() => {
+    const numAnts = 15;
+    const initialAntPositions = [];
+
+    for (let i = 0; i < numAnts; i++) {
+      let newPos;
+      let isColliding;
+      do {
+        newPos = {
+          x: Math.random() * window.innerWidth,
+          y: Math.random() * window.innerHeight,
+        };
+        isColliding = initialAntPositions.some(
+          (pos) =>
+            Math.sqrt(
+              Math.pow(newPos.x - pos.x, 2) + Math.pow(newPos.y - pos.y, 2)
+            ) < 50
+        );
+      } while (isColliding);
+
+      initialAntPositions.push(newPos);
+    }
+
+    setAntPositions(initialAntPositions);
+  }, []);
 
   return (
     <div className="h-screen w-screen overflow-hidden relative">
@@ -140,32 +188,35 @@ function App() {
           className="w-28 md:w-32 lg:w-36 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"
         />
       )}
-      <img
-        src={blood}
-        alt="blood"
-        className="w-28 md:w-32 lg:w-36 hidden absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"
-      />
-      {isAntVisible && isAntAlive ? (
-        <img
-          src={ant}
-          alt="ant"
-          id="ant"
-          className="absolute w-40 md:w-48 lg:w-56 top-0"
-          style={{ left: `${antPosition.x}px`, top: `${antPosition.y}px` }}
-          onClick={handleAntClick}
-        />
-      ) : (
-        isAntVisible && (
-          <img
-            src={deadAnt}
-            alt="dead ant"
-            id="ant"
-            className="absolute w-40 md:w-48 lg:w-56 top-0"
-            style={{ left: `${antPosition.x}px`, top: `${antPosition.y}px` }}
-          />
-        )
+      {antPositions.length == score && (
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
+          <h1 className="text-4xl md:text-6xl lg:text-8xl text-green-500 text-shadow-md">
+            You Win!
+          </h1>
+          <button
+            onClick={restartGame}
+            className="mt-8 px-8 py-4 text-xl md:text-2xl lg:text-3xl bg-blue-500 text-white rounded-md cursor-pointer shadow-md"
+          >
+            Restart
+          </button>
+        </div>
       )}
-      {points === 0 || points < 0 ? (
+      {antPositions.map(
+        (position, index) =>
+          !position.isDead && (
+            <img
+              key={index}
+              id={`ant-${index}`}
+              src={ant}
+              alt="ant"
+              className="absolute w-40 md:w-48 lg:w-56 top-0"
+              style={{ left: `${position.x}px`, top: `${position.y}px` }}
+              onClick={() => handleAntClick(index)}
+            />
+          )
+      )}
+
+      {life <= 0 ? (
         <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
           <h1 className="text-4xl md:text-6xl lg:text-8xl text-red-500 text-shadow-md">
             Game Over
@@ -180,7 +231,7 @@ function App() {
       ) : (
         <div className="flex justify-between">
           <p className="absolute top-0 right-10 text-xl md:text-2xl lg:text-3xl font-bold mr-10">
-            Life: {points}
+            Life: {life}
           </p>
           <p className="absolute top-10 right-1/2 md:right-1/4 md:top-0 lg:right-1/3 text-xl md:text-2xl lg:text-3xl font-bold mr-10">
             Score: {score}
